@@ -16,35 +16,6 @@
 > - 本项目基于对 ChatGPT 官网相关能力的逆向研究实现，存在账号受限、临时封禁或永久封禁的风险。请勿使用你自己的重要账号、常用账号或高价值账号进行测试。
 
 
-## 赞助商
-
-<table>
-  <tr>
-    <td width="190" align="center">
-      <a href="https://kunrouai.com/?utm_source=chatgpt2api"><img src="assets/kunrouai.svg" width="163" alt="坤肉AI"></a>
-    </td>
-    <td>
-      <a href="https://kunrouai.com/?utm_source=chatgpt2api">坤肉AI</a> 是一站式 AI 视觉创作平台，集 AI 生图、视频生成、多人协作画布及 Agent/MCP 连接于一体，适合个人创作与团队协作，同时面向企业提供源码出售及私有化部署服务，欢迎企业咨询合作！另有 <a href="https://api.kunrouai.com/?utm_source=chatgpt2api">API 开放平台</a>，提供丰富的 AI 模型 API 接口，支持快速接入与集成，欢迎开发者及企业对接合作！
-    </td>
-  </tr>
-  <tr>
-    <td width="190" align="center">
-      <a href="https://www.ipwo.net/?ref=githubbasketikunchatgpt2api"><img src="assets/ipwo.png" width="163" alt="IPWO"></a>
-    </td>
-    <td>
-      <a href="https://www.ipwo.net/?ref=githubbasketikunchatgpt2api">IPWO</a> 住宅代理提供动态、静态及不限量住宅代理，覆盖 195+ 个国家和地区，支持 HTTP(S) 与 SOCKS5 协议。<br>对于使用 ChatGPT2API 进行 AI 图片生成、图片编辑和 API 集成的开发者，IPWO 支持免费测试，支持地区选择与网络连接配置，满足多种开发和测试需求。优惠折扣码：<b>0200</b>。
-    </td>
-  </tr>
-  <tr>
-    <td width="190" align="center">
-      <a href="https://www.atlascloud.ai/zh?utm_source=github&utm_medium=link&utm_campaign=chatgpt2api"><img src="assets/atlascloud.svg" width="163" alt="Atlas Cloud"></a>
-    </td>
-    <td>
-      <a href="https://www.atlascloud.ai/zh?utm_source=github&utm_medium=link&utm_campaign=chatgpt2api">Atlas Cloud</a> is a full-modal AI inference platform that gives developers a single AI API to access video generation, image generation, and LLM APIs. Instead of managing multiple vendor integrations, you connect once and get unified access to 300+ curated models across all modalities. Check out <a href="https://www.atlascloud.ai/console/coding-plan">Atlas Cloud's new coding plan promotion</a> for more budget-friendly API access.
-    </td>
-  </tr>
-</table>
-
 ## 快速开始
 
 ### Docker 运行
