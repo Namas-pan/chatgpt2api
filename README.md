@@ -61,6 +61,8 @@ docker compose up -d
 - API 地址：`http://localhost:3000/v1`
 - 数据目录：`./data`
 
+> 下文所有示例统一使用 `3000` 端口。如果改用 `docker-compose.local.yml` 源码构建（端口映射为 `8000`），或者自己改过 `docker-compose.yml` 的 `ports`，请把示例里的端口替换成你实际使用的端口。
+
 ### WARP / FlareSolverr 稳定代理部署
 
 如果图片链路经常遇到 Cloudflare 拦截，可以启用附带的 WARP + Privoxy + FlareSolverr 方案：
@@ -96,19 +98,31 @@ uv run main.py
 启动前端：
 
 ```bash
-cd chatgpt2api/web
+cd web
 bun install
 bun run dev
 ```
 
-后续更新新版本：
+### 更新版本
+
+使用预构建镜像部署时：
 
 ```bash
 docker pull ghcr.io/basketikun/chatgpt2api:latest
-docker-compose down
-docker-compose up -d
-
+docker compose down
+docker compose up -d
 ```
+
+使用源码构建（`docker compose build`）部署时，拉取代码后重新构建即可：
+
+```bash
+git pull
+docker compose build
+docker compose down
+docker compose up -d
+```
+
+`data/` 与 `config.json` 是以 volume 挂载进容器的，更新过程不会影响账号数据与密钥。
 
 ### 存储后端配置
 
@@ -135,8 +149,9 @@ environment:
 - 兼容 `POST /v1/images/edits` 图片编辑接口
 - 兼容面向图片场景的 `POST /v1/chat/completions`
 - 兼容面向图片场景的 `POST /v1/responses`
-- `GET /v1/models` 返回 `gpt-image-2`、`gpt-image-2.5`、`gpt-image-2.6`、`codex-gpt-image-2`、`auto`、`gpt-5`、`gpt-5-1`、`gpt-5-2`、`gpt-5-3`、`gpt-5-3-mini`、
-  `gpt-5-mini`
+- `GET /v1/models` 按账号池实际能力动态返回，不写死固定列表：文本模型由账号类型向上游拉取后取并集；图片别名按账号情况追加——有可用的官网（web）账号时暴露
+  `gpt-image-2` / `gpt-image-2.5` / `gpt-image-2.6`，有 `Plus` / `Team` / `Pro` 的 Codex 账号时追加 `codex-gpt-image-2` 及 `plus-` / `team-` / `pro-` 前缀变体。
+  上游标记为内部或工作区副本的模型会被隐藏，最终以接口实际返回为准
 - 支持通过 `n` 返回多张生成结果
 - 支持生成可编辑 PPT 文件
 - 支持生成可编辑 PSD 文件
@@ -146,17 +161,20 @@ environment:
 ### 在线画图功能
 
 - 内置在线画图工作台，支持生成、图片编辑与多图组图编辑
-- 支持 `gpt-image-2`、`gpt-image-2.5`、`gpt-image-2.6`、`codex-gpt-image-2`、`auto`、`gpt-5`、`gpt-5-1`、`gpt-5-2`、`gpt-5-3`、`gpt-5-3-mini`、`gpt-5-mini` 模型选择
+- 模型下拉框从 `/v1/models` 动态读取，自动列出当前账号池可用的图片模型，不再是写死的列表
 - 编辑模式支持参考图上传
 - 前端支持多图生成交互
 - 本地保存图片会话历史，支持回看、删除和清空
 - 支持服务端缓存图片URL
+- 图片按原始字节与真实扩展名保存和下载，支持 PNG / JPEG / WEBP / GIF / SVG，不再统一强制成 `.png`
 - 图片生成进度追踪，超时后可继续等待
 - 图片懒加载与滚动位置记忆，优化大量图片场景性能
 
 ### 号池管理功能
 
 - 自动刷新账号邮箱、类型、额度和恢复时间（异步进度追踪）
+- 刷新失败的原因会写回账号记录（`last_refresh_error`）并在列表中标红提示，不再静默丢弃
+- 标记账号是否具备生图能力：`status` 正常但图片额度为 0 的账号显示为「无额度 · 不参与生图」，也不会被算进 `/v1/models` 的可用判断
 - 轮询可用账号执行图片生成与图片编辑
 - 遇到 Token 失效类错误时自动剔除无效 Token
 - 定时检查限流账号并自动刷新
@@ -199,10 +217,10 @@ Authorization: Bearer <auth-key>
 <summary><code>GET /v1/models</code></summary>
 <br>
 
-返回当前暴露的图片模型列表。
+返回当前账号池实际可用的模型列表。内容随账号情况动态变化：文本模型来自上游模型目录，图片别名按账号能力追加；图片模型需要至少有一个可用的官网账号才会出现。
 
 ```bash
-curl http://localhost:8000/v1/models \
+curl http://localhost:3000/v1/models \
   -H "Authorization: Bearer <auth-key>"
 ```
 
@@ -212,7 +230,7 @@ curl http://localhost:8000/v1/models \
 
 | 字段   | 说明                                                                                                         |
 |:-----|:-----------------------------------------------------------------------------------------------------------|
-| 返回模型 | `gpt-image-2`、`gpt-image-2.5`、`gpt-image-2.6`、`codex-gpt-image-2`、`auto`、`gpt-5`、`gpt-5-1`、`gpt-5-2`、`gpt-5-3`、`gpt-5-3-mini`、`gpt-5-mini` |
+| 返回模型 | 动态生成，以实际返回为准。图片别名：`gpt-image-2`、`gpt-image-2.5`、`gpt-image-2.6`（需有可用的官网账号），`codex-gpt-image-2` 及 `plus-` / `team-` / `pro-` 变体（需有对应订阅的 Codex 账号） |
 | 接入场景 | 可接入 Cherry Studio、New API 等上游或客户端                                                                          |
 
 <br>
@@ -226,7 +244,7 @@ curl http://localhost:8000/v1/models \
 OpenAI 兼容图片生成接口，用于文生图。
 
 ```bash
-curl http://localhost:8000/v1/images/generations \
+curl http://localhost:3000/v1/images/generations \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <auth-key>" \
   -d '{
@@ -259,7 +277,7 @@ curl http://localhost:8000/v1/images/generations \
 OpenAI 兼容图片编辑接口，可上传图片文件，也可按官方 JSON 格式传入图片链接并生成编辑结果。
 
 ```bash
-curl http://localhost:8000/v1/images/edits \
+curl http://localhost:3000/v1/images/edits \
   -H "Authorization: Bearer <auth-key>" \
   -F "model=gpt-image-2" \
   -F "prompt=把这张图改成赛博朋克夜景风格" \
@@ -270,7 +288,7 @@ curl http://localhost:8000/v1/images/edits \
 也可以直接传图片 URL：
 
 ```bash
-curl http://localhost:8000/v1/images/edits \
+curl http://localhost:3000/v1/images/edits \
   -H "Authorization: Bearer <auth-key>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -306,7 +324,7 @@ curl http://localhost:8000/v1/images/edits \
 面向文本、网页搜索与图片场景的 Chat Completions 兼容接口，不是完整通用聊天代理。
 
 ```bash
-curl http://localhost:8000/v1/chat/completions \
+curl http://localhost:3000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <auth-key>" \
   -d '{
@@ -345,7 +363,7 @@ curl http://localhost:8000/v1/chat/completions \
 面向文本、网页搜索和图片生成工具调用的 Responses API 兼容接口，不是完整通用 Responses API 代理。
 
 ```bash
-curl http://localhost:8000/v1/responses \
+curl http://localhost:3000/v1/responses \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <auth-key>" \
   -d '{
