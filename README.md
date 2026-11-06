@@ -21,7 +21,7 @@
 ### Docker 运行
 
 ```bash
-git clone git@github.com:basketikun/chatgpt2api.git
+git clone https://github.com/Namas-pan/chatgpt2api.git
 cd chatgpt2api
 docker compose up -d
 ```
@@ -60,7 +60,7 @@ docker compose -f docker-compose.warp.yml up -d --build
 启动后端：
 
 ```bash
-git clone git@github.com:basketikun/chatgpt2api.git
+git clone https://github.com/Namas-pan/chatgpt2api.git
 cd chatgpt2api
 uv sync
 uv run main.py
