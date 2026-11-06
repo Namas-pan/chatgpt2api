@@ -4,6 +4,7 @@ import { memo, useEffect, useRef, useState } from "react";
 import { Clock3, Download, EyeOff, LoaderCircle, RotateCcw, Sparkles, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { detectImageFormatFromBase64, formatFromMimeType, formatFromUrl } from "@/lib/image-format";
 import { cn } from "@/lib/utils";
 import type { ImageConversation, ImageTurnStatus, StoredImage, StoredReferenceImage } from "@/store/image-conversations";
 
@@ -38,7 +39,9 @@ function getStoredImageSrc(image: StoredImage) {
       const binary = atob(image.b64_json);
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      const blob = new Blob([bytes], { type: "image/png" });
+      // 按真实格式建 blob，否则 GIF 会退化成静态图、SVG 也会被当成位图
+      const mime = detectImageFormatFromBase64(image.b64_json)?.mime || "image/png";
+      const blob = new Blob([bytes], { type: mime });
       url = URL.createObjectURL(blob);
       b64BlobUrlCache.set(image.b64_json, url);
     }
@@ -47,14 +50,20 @@ function getStoredImageSrc(image: StoredImage) {
   return image.url || "";
 }
 
+/** 下载原始素材：保留上游返回的字节，按真实格式命名。 */
 async function downloadStoredImage(image: StoredImage, index: number) {
   let blob: Blob | null = null;
+  let extension = "png";
   try {
     if (image.b64_json) {
+      const format = detectImageFormatFromBase64(image.b64_json);
+      if (format) {
+        extension = format.ext;
+      }
       const binary = atob(image.b64_json);
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      blob = new Blob([bytes], { type: "image/png" });
+      blob = new Blob([bytes], { type: format?.mime || "image/png" });
     } else if (image.url) {
       // 确保 URL 是绝对路径
       const url = image.url.startsWith("http") ? image.url : `${window.location.origin}${image.url}`;
@@ -63,6 +72,13 @@ async function downloadStoredImage(image: StoredImage, index: number) {
         throw new Error(`HTTP ${res.status}: ${res.statusText}`);
       }
       blob = await res.blob();
+      const format =
+        formatFromUrl(url) ||
+        formatFromMimeType(blob.type) ||
+        formatFromMimeType(res.headers.get("content-type"));
+      if (format) {
+        extension = format.ext;
+      }
     } else {
       return;
     }
@@ -77,7 +93,7 @@ async function downloadStoredImage(image: StoredImage, index: number) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `image-${index + 1}.png`;
+  a.download = `image-${index + 1}.${extension}`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

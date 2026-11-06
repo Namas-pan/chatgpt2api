@@ -23,7 +23,14 @@ from PIL import Image
 from services.account_service import account_service
 from services.config import config
 from services.proxy_service import proxy_settings
-from utils.helper import UpstreamHTTPError, ensure_ok, iter_sse_payloads, new_uuid, split_image_model
+from utils.helper import (
+    UpstreamHTTPError,
+    WEB_IMAGE_MODELS,
+    ensure_ok,
+    iter_sse_payloads,
+    new_uuid,
+    split_image_model,
+)
 from utils.log import logger
 from utils.pow import build_legacy_requirements_token, build_proof_token, parse_pow_resources
 from utils.turnstile import solve_turnstile_token
@@ -566,7 +573,9 @@ class OpenAIBackendAPI:
         _, base_model = split_image_model(model)
         if not base_model:
             return "auto", ""
-        if base_model == "gpt-image-2":
+        if base_model in WEB_IMAGE_MODELS:
+            # 官网链路统一走默认上游模型，图片路由由 system_hints: ["picture_v2"] 决定，
+            # gpt-image-2 / gpt-image-2.5 / gpt-image-2.6 目前只是对外暴露的别名。
             upstream_model = config.default_upstream_model_name
         elif base_model == CODEX_IMAGE_MODEL:
             upstream_model = base_model
@@ -2758,6 +2767,10 @@ class OpenAIBackendAPI:
                 "permission": [],
                 "root": slug,
                 "parent": None,
+                # 透传上游的可见性标记：/v1/models 据此隐藏内部与工作模式专用条目
+                # （见 services/protocol/openai_v1_models.py::_is_hidden_upstream_model）。
+                "tags": item.get("tags") or [],
+                "is_work_mode_model": bool(item.get("is_work_mode_model")),
             })
         data.sort(key=lambda item: item["id"])
         return {"object": "list", "data": data}

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { ChevronLeft, ChevronRight, Download, X } from "lucide-react";
 
+import { resolveImageFormatFromSrc } from "@/lib/image-format";
 import { cn } from "@/lib/utils";
 
 type LightboxImage = {
@@ -182,11 +183,12 @@ export function ImageLightbox({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [open, goPrev, goNext]);
 
-  const handleDownload = useCallback(() => {
+  const handleDownload = useCallback(async () => {
     if (!current) return;
+    const format = await resolveImageFormatFromSrc(current.src);
     const link = document.createElement("a");
     link.href = current.src;
-    link.download = `image-${current.id}.png`;
+    link.download = `image-${current.id}.${format?.ext || "png"}`;
     link.click();
   }, [current]);
 

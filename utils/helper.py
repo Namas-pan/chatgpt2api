@@ -14,9 +14,14 @@ from fastapi import HTTPException
 from services.proxy_service import proxy_settings
 from utils.log import logger
 
-BASE_IMAGE_MODELS = {"gpt-image-2", "codex-gpt-image-2"}
-IMAGE_MODEL_PLAN_TYPES = ("plus", "team", "pro")
 CODEX_IMAGE_MODEL = "codex-gpt-image-2"
+# 官网 Web 链路的图片模型别名集合。
+# 注意：上游并不按这些名字路由，真正的开关是 system_hints: ["picture_v2"]
+# （见 services/openai_backend_api.py::_image_model_settings）。
+# 新增别名只需加进这个集合，白名单、/v1/models 和请求路由会自动跟随。
+WEB_IMAGE_MODELS = {"gpt-image-2", "gpt-image-2.5", "gpt-image-2.6"}
+BASE_IMAGE_MODELS = WEB_IMAGE_MODELS | {CODEX_IMAGE_MODEL}
+IMAGE_MODEL_PLAN_TYPES = ("plus", "team", "pro")
 PREFIXED_CODEX_IMAGE_MODELS = {
     f"{plan_type}-{CODEX_IMAGE_MODEL}"
     for plan_type in IMAGE_MODEL_PLAN_TYPES
@@ -35,6 +40,47 @@ REMOTE_IMAGE_TIMEOUT_SECONDS = 20
 def _image_extension(mime_type: str) -> str:
     image_type = mime_type.split("/", 1)[1].split(";", 1)[0].lower() if "/" in mime_type else "png"
     return "jpg" if image_type == "jpeg" else image_type or "png"
+
+
+# 扩展名 -> MIME，用于按真实格式回图片时的 Content-Type
+IMAGE_EXTENSION_MIME_TYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".svg": "image/svg+xml",
+}
+
+
+def image_mime_type_for_path(path: object, default: str = "image/png") -> str:
+    """根据文件路径/扩展名返回 MIME 类型。"""
+    extension = Path(str(path or "")).suffix.lower()
+    return IMAGE_EXTENSION_MIME_TYPES.get(extension, default)
+
+
+def detect_image_extension(data: bytes) -> str | None:
+    """按文件头识别图片真实格式，返回带点的扩展名；识别不了返回 None。
+
+    上游返回的图片不再只有 PNG：GIF、SVG、WEBP 都要能按原格式落盘和下载，
+    否则会把原始素材存成 .png，等于丢掉了动图和矢量信息。
+    """
+    if not data:
+        return None
+    head = data[:16]
+    if head.startswith(b"\x89PNG\r\n\x1a\n"):
+        return ".png"
+    if head.startswith(b"\xff\xd8\xff"):
+        return ".jpg"
+    if head.startswith((b"GIF87a", b"GIF89a")):
+        return ".gif"
+    if head[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return ".webp"
+    # SVG 是文本，可能带 BOM、空白、XML 声明或注释，所以放宽到前缀里找 <svg
+    sample = data[:2048].lstrip(b"\xef\xbb\xbf \t\r\n")
+    if b"<svg" in sample.lower():
+        return ".svg"
+    return None
 
 
 def _decode_json_image_string(value: str, index: int, filename: str | None = None, mime_type: str | None = None) -> tuple[bytes, str, str]:

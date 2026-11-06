@@ -30,6 +30,38 @@ class AccountCapabilityTests(unittest.TestCase):
         )
         self.assertTrue(AccountService._is_image_account_available({"status": "正常", "quota": 1}))
 
+    def test_refresh_failure_records_error_and_exposes_image_availability(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            service = AccountService(JSONStorageBackend(Path(tmp_dir) / "accounts.json"))
+            service.add_accounts(["token-1"])
+            service.update_account("token-1", {"status": "正常", "quota": 0})
+
+            # 状态正常但额度为 0：出现在列表里，但不参与生图调度
+            self.assertEqual(service.list_accounts()[0]["status"], "正常")
+            self.assertFalse(service.list_accounts()[0]["image_available"])
+
+            def _fail(*_args, **_kwargs):
+                raise RuntimeError(
+                    "Failed to perform, curl: (28) Connection timed out after 20010 milliseconds."
+                )
+
+            with patch.object(service, "fetch_remote_info", side_effect=_fail):
+                result = service.refresh_accounts(["token-1"])
+
+            self.assertEqual(result["refreshed"], 0)
+            account = service.get_account("token-1") or {}
+            self.assertIn("curl: (28)", str(account.get("last_refresh_error") or ""))
+            self.assertIsNotNone(account.get("last_refresh_error_at"))
+            # 刷新失败不应改写账号状态和额度
+            self.assertEqual(account.get("status"), "正常")
+            self.assertEqual(account.get("quota"), 0)
+
+            service.update_account("token-1", {"quota": 2})
+            self.assertTrue(service.list_accounts()[0]["image_available"])
+
+            service._record_refresh_success("token-1")
+            self.assertIsNone(service.get_account("token-1").get("last_refresh_error"))
+
     def test_prolite_variants_are_normalized(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             service = AccountService(JSONStorageBackend(Path(tmp_dir) / "accounts.json"))
@@ -70,10 +102,13 @@ class AccountCapabilityTests(unittest.TestCase):
 
     def test_split_image_model_supports_plan_type_prefix(self) -> None:
         self.assertEqual(split_image_model("gpt-image-2"), (None, "gpt-image-2"))
+        self.assertEqual(split_image_model("gpt-image-2.5"), (None, "gpt-image-2.5"))
+        self.assertEqual(split_image_model("gpt-image-2.6"), (None, "gpt-image-2.6"))
         self.assertEqual(split_image_model("plus-codex-gpt-image-2"), ("plus", "codex-gpt-image-2"))
         self.assertEqual(split_image_model("team-codex-gpt-image-2"), ("team", "codex-gpt-image-2"))
         self.assertEqual(split_image_model("pro-codex-gpt-image-2"), ("pro", "codex-gpt-image-2"))
         self.assertEqual(split_image_model("plus-gpt-image-2"), (None, None))
+        self.assertEqual(split_image_model("plus-gpt-image-2.6"), (None, None))
         self.assertEqual(split_image_model("unknown-image-model"), (None, None))
 
     def test_get_available_access_token_filters_by_plan_type(self) -> None:

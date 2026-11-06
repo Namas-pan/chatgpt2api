@@ -1070,8 +1070,10 @@ class AccountService:
             return dict(account) if account else None
 
     def list_accounts(self) -> list[dict]:
-        """返回所有账号的副本，并为每个账号附加当前图片在途数 image_inflight。
+        """返回所有账号的副本，并为每个账号附加可生图判定与当前图片在途数。
 
+        image_available 为后端权威判定（状态可用且 quota > 0），前端据此区分
+        "状态正常但没额度"的账号——这类账号会出现在列表里，却不会参与生图调度。
         image_inflight 为内存态并发计数(账号正在生成、尚未结束的图片数)。号池空闲时
         若某账号该值持续 > 0，说明其并发槽位泄漏、已被静默排除出调度，可借此在 UI 上诊断。
         """
@@ -1081,6 +1083,7 @@ class AccountService:
                 account = dict(item)
                 token = account.get("access_token") or ""
                 account["image_inflight"] = int(self._image_inflight.get(token, 0))
+                account["image_available"] = self._is_image_account_available(account)
                 result.append(account)
             return result
 
@@ -1251,6 +1254,31 @@ class AccountService:
             account = self._normalize_account(next_item)
             if account is not None:
                 self._accounts[access_token] = account
+
+    def _record_refresh_error(self, access_token: str, event: str, error: str) -> None:
+        """把远端信息刷新失败写入账号记录。
+
+        网络类错误（curl 超时、代理不通等）原先只会出现在一次性的刷新响应里，
+        关掉弹窗就查不到了。落库后前端和日志都能追溯，避免"状态正常但什么都刷不出来"。
+        """
+        now = datetime.now(timezone.utc).isoformat()
+        with self._lock:
+            resolved = self._resolve_access_token_locked(access_token)
+            current = self._accounts.get(resolved)
+            if current is None:
+                return
+            next_item = dict(current)
+            next_item["last_refresh_error"] = str(error or "refresh failed")
+            next_item["last_refresh_error_at"] = now
+            account = self._normalize_account(next_item)
+            if account is not None:
+                self._accounts[resolved] = account
+                self._save_accounts()
+        log_service.add(
+            LOG_TYPE_ACCOUNT,
+            "刷新账号信息失败",
+            {"source": event, "token": anonymize_token(access_token), "error": str(error or "")},
+        )
 
     def _should_defer_invalid_token(self, account: dict | None, now: datetime) -> bool:
         if not isinstance(account, dict):
@@ -1520,6 +1548,7 @@ class AccountService:
                     from services.protocol.conversation import is_tls_connection_error
                     if not is_tls_connection_error(error_str):
                         errors.append({"token": anonymize_token(token), "error": error_str})
+                    self._record_refresh_error(token, "refresh_accounts", error_str)
                 else:
                     if account is not None:
                         refreshed += 1

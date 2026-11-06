@@ -35,6 +35,11 @@ export type Account = {
   fail: number;
   /** 当前图片在途数(正在生成、尚未结束的图片数)。号池空闲时持续 > 0 表示并发槽位泄漏。 */
   image_inflight?: number;
+  /** 后端权威判定：状态可用且额度 > 0 才会参与生图调度。 */
+  image_available?: boolean;
+  /** 最近一次刷新远端账号信息失败的原因（网络错误也会记录）。 */
+  last_refresh_error?: string | null;
+  last_refresh_error_at?: string | null;
   last_used_at?: string | null;
   proxy?: string | null;
 };

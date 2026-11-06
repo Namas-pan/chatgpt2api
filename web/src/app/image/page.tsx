@@ -30,6 +30,7 @@ import {
   type ImageTask,
 } from "@/lib/api";
 import { useAuthGuard } from "@/lib/use-auth-guard";
+import { detectImageFormatFromBase64 } from "@/lib/image-format";
 import { useSettingsStore } from "@/app/settings/store";
 import {
   clearImageConversations,
@@ -163,10 +164,14 @@ function buildReferenceImageFromResult(image: StoredImage, fileName: string): St
     return null;
   }
 
+  const format = detectImageFormatFromBase64(image.b64_json);
+  const mime = format?.mime || "image/png";
+  const name = format ? fileName.replace(/\.[a-z0-9]+$/i, `.${format.ext}`) : fileName;
+
   return {
-    name: fileName,
-    type: "image/png",
-    dataUrl: `data:image/png;base64,${image.b64_json}`,
+    name,
+    type: mime,
+    dataUrl: `data:${mime};base64,${image.b64_json}`,
   };
 }
 

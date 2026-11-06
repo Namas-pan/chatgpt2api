@@ -12,8 +12,9 @@ from fastapi.responses import FileResponse, Response
 from PIL import Image, ImageOps
 
 from services.config import config
-from services.image_storage_service import image_storage_service
+from services.image_storage_service import IMAGE_EXTENSIONS, image_storage_service
 from services.image_tags_service import load_tags, remove_tags
+from utils.helper import image_mime_type_for_path
 from utils.log import logger
 
 THUMBNAIL_SIZE = (320, 320)
@@ -50,15 +51,26 @@ def _safe_image_path(relative_path: str) -> Path:
     return path
 
 
-def get_image_response(relative_path: str) -> FileResponse | Response:
+def _image_response_headers(relative_path: str) -> dict[str, str]:
     headers = {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "GET, OPTIONS",
         "Access-Control-Allow-Headers": "*",
     }
+    if Path(_safe_relative_path(relative_path)).suffix.lower() == ".svg":
+        # SVG 是可以带脚本的文本格式，同源直接打开会变成 XSS 载体。
+        # 这里按图片用途锁死资源加载，并禁止浏览器嗅探。
+        headers["X-Content-Type-Options"] = "nosniff"
+        headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'"
+    return headers
+
+
+def get_image_response(relative_path: str) -> FileResponse | Response:
+    media_type = image_mime_type_for_path(_safe_relative_path(relative_path))
+    headers = _image_response_headers(relative_path)
     if image_storage_service.has_local(relative_path):
-        return FileResponse(_safe_image_path(relative_path), headers=headers)
-    return Response(content=image_storage_service.get_bytes(relative_path), media_type="image/png", headers=headers)
+        return FileResponse(_safe_image_path(relative_path), media_type=media_type, headers=headers)
+    return Response(content=image_storage_service.get_bytes(relative_path), media_type=media_type, headers=headers)
 
 
 def _thumbnail_path(relative_path: str) -> Path:
@@ -104,7 +116,10 @@ def ensure_thumbnail(relative_path: str) -> Path:
     return target
 
 
-def get_thumbnail_response(relative_path: str) -> FileResponse:
+def get_thumbnail_response(relative_path: str) -> FileResponse | Response:
+    if Path(_safe_relative_path(relative_path)).suffix.lower() == ".svg":
+        # PIL 无法栅格化 SVG，缩略图直接回退到原图（前端 onError 也会兜底）
+        return get_image_response(relative_path)
     headers = {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "GET, OPTIONS",
@@ -113,7 +128,7 @@ def get_thumbnail_response(relative_path: str) -> FileResponse:
     return FileResponse(ensure_thumbnail(relative_path), headers=headers)
 
 
-def get_image_download_response(relative_path: str) -> FileResponse:
+def get_image_download_response(relative_path: str) -> FileResponse | Response:
     cors_headers = {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "GET, OPTIONS",
@@ -130,7 +145,7 @@ def get_image_download_response(relative_path: str) -> FileResponse:
     }
     return Response(
         content=image_storage_service.get_bytes(rel),
-        media_type="image/png",
+        media_type=image_mime_type_for_path(rel),
         headers=headers,
     )
 
@@ -252,7 +267,10 @@ def storage_stats() -> dict:
 
 
 def compress_images(quality: int = 60) -> dict:
-    """重新压缩所有图片，返回节省的空间"""
+    """重新压缩所有图片，返回节省的空间。
+
+    只处理 PNG：GIF 重压会丢动画帧，SVG 是矢量文本，PIL 都会写坏，所以跳过。
+    """
     saved = 0
     count = 0
     for p in sorted(config.images_dir.rglob("*.png")):
@@ -284,7 +302,11 @@ def delete_to_target(target_free_mb: int, dry_run: bool = False) -> dict:
         return {"removed": 0, "current_free_mb": current_free, "target_free_mb": target_free_mb, "done": True}
 
     files = sorted(
-        (p for p in config.images_dir.rglob("*.png") if p.is_file()),
+        (
+            p
+            for p in config.images_dir.rglob("*")
+            if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS
+        ),
         key=lambda p: p.stat().st_mtime,
     )
     removed = 0

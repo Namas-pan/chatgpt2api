@@ -1115,6 +1115,22 @@ function AccountsPageContent() {
                             <StatusIcon className="size-3.5" />
                             {account.status}
                           </Badge>
+                          {account.status === "正常" && account.image_available === false ? (
+                            <div
+                              className="mt-1 text-[11px] leading-4 text-amber-600"
+                              title="账号状态正常但剩余额度为 0，不会参与生图调度。先确认刷新成功，或确认该账号本身有图片额度。"
+                            >
+                              无额度 · 不参与生图
+                            </div>
+                          ) : null}
+                          {account.last_refresh_error ? (
+                            <div
+                              className="mt-1 max-w-[10rem] truncate text-[11px] leading-4 text-rose-600"
+                              title={account.last_refresh_error}
+                            >
+                              刷新失败
+                            </div>
+                          ) : null}
                         </td>
                         <td className="px-4 py-3">
                           <div className="text-xs leading-5 text-stone-500">{account.email ?? "—"}</div>
@@ -1131,7 +1147,7 @@ function AccountsPageContent() {
                           })()}
                         </td>
                         <td className="px-4 py-3">
-                          <Badge variant="info" className="rounded-md">
+                          <Badge variant={account.quota > 0 ? "info" : "secondary"} className="rounded-md">
                             {formatQuota(account)}
                           </Badge>
                         </td>
