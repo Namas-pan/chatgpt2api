@@ -26,6 +26,8 @@ cd chatgpt2api
 docker compose up -d
 ```
 
+首次运行会从源码构建镜像，需要几分钟；`docker compose up -d` 在镜像不存在时会自动触发构建。
+
 启动前请先在 `config.json` 中设置 `auth-key`，也可以在 `docker-compose.yml` 中通过 `CHATGPT2API_AUTH_KEY` 覆盖。
 
 - Web 面板：`http://localhost:3000`
@@ -76,24 +78,17 @@ bun run dev
 
 ### 更新版本
 
-使用预构建镜像部署时：
-
-```bash
-docker pull ghcr.io/basketikun/chatgpt2api:latest
-docker compose down
-docker compose up -d
-```
-
-使用源码构建（`docker compose build`）部署时，拉取代码后重新构建即可：
+本仓库默认从源码构建镜像，拉取代码后重新构建即可：
 
 ```bash
 git pull
 docker compose build
-docker compose down
 docker compose up -d
 ```
 
 `data/` 与 `config.json` 是以 volume 挂载进容器的，更新过程不会影响账号数据与密钥。
+
+> 也可以改用预构建镜像：给仓库打一个 `v*` tag 会触发 GitHub Actions 把镜像发布到 `ghcr.io/<owner>/chatgpt2api`，之后把 `docker-compose.yml` 里的 `build:` 换成 `image: ghcr.io/<owner>/chatgpt2api:latest`，更新时执行 `docker compose pull && docker compose up -d` 即可。
 
 ### 存储后端配置
 
