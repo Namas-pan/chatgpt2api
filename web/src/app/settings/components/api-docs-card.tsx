@@ -101,7 +101,7 @@ const docs: ApiDoc[] = [
     icon: FileArchive,
     input: [
       ["prompt", "string", "图片生成提示词。"],
-      ["model", "string", "可选，默认 gpt-image-2。"],
+      ["model", "string", "可选，默认 gpt-image-2.6。"],
       ["n", "number", "可选，生成数量，当前限制 1-4。"],
       ["size", "string", "可选，图片尺寸。"],
       ["quality", "string", "可选，默认 auto。"],
@@ -115,7 +115,7 @@ const docs: ApiDoc[] = [
     example: (baseUrl: string, key: string) => `curl ${baseUrl}/images/generations \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer ${key}" \\
-  -d '{"model":"gpt-image-2","prompt":"一张极简产品海报","n":1}'`,
+  -d '{"model":"gpt-image-2.6","prompt":"一张极简产品海报","n":1}'`,
   },
   {
     title: "图片编辑",
@@ -125,7 +125,7 @@ const docs: ApiDoc[] = [
     input: [
       ["image", "file | file[] | URL", "参考图，支持 multipart 上传，也支持 JSON 图片链接。"],
       ["prompt", "string", "编辑提示词。"],
-      ["model", "string", "可选，默认 gpt-image-2。"],
+      ["model", "string", "可选，默认 gpt-image-2.6。"],
       ["n", "number", "可选，生成数量，当前限制 1-4。"],
       ["size", "string", "可选，图片尺寸。"],
       ["quality", "string", "可选，默认 auto。"],
@@ -137,7 +137,7 @@ const docs: ApiDoc[] = [
     ],
     example: (baseUrl: string, key: string) => `curl ${baseUrl}/images/edits \\
   -H "Authorization: Bearer ${key}" \\
-  -F "model=gpt-image-2" \\
+  -F "model=gpt-image-2.6" \\
   -F "prompt=改成赛博朋克夜景" \\
   -F "image=@./input.png"`,
   },
